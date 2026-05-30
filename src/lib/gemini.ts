@@ -45,7 +45,7 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
         importanceScore: importance,
         summary: summary.length > 0 ? summary : [article.description || 'No further description available.'],
         category: classifyCategory(article.title, article.description || ''),
-        sector: 'General Finance',
+        sector: 'Finance',
         country: 'Global'
       };
     });
@@ -117,34 +117,34 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
       
       if (!rawText) {
         throw new Error('Gemini API returned an empty candidate or body structure');
-      category: classifyCategory(article.title, article.description || ''),
-      sector: 'Finance',
-      country: 'Global'
-      };
-      });
       }
-      ...
-      const aiResult = aiResults.find(r => r.index === index) || {
-        sentiment: analyzeSentiment(article.title, article.description || ''),
-        importance: 'Medium',
-        summary: [article.description || ''],
-        relevanceScore: 75,
-        cleanedTitle: article.title,
-        sector: 'Finance',
-        country: 'Global'
-      };
 
-      processedArticles.push({
-        ...article,
-        title: aiResult.cleanedTitle || article.title,
-        sentiment: aiResult.sentiment,
-        relevanceScore: aiResult.relevanceScore,
-        importanceScore: aiResult.importance,
-        summary: aiResult.summary && aiResult.summary.length > 0 ? aiResult.summary : [article.description || ''],
-        category: classifyCategory(article.title, article.description || ''),
-        sector: aiResult.sector || 'Finance',
-        country: aiResult.country || 'Global'
+      const aiResults: AIBatchResult[] = JSON.parse(rawText.trim());
+
+      batch.forEach((article, index) => {
+        const aiResult = aiResults.find(r => r.index === index) || {
+          sentiment: analyzeSentiment(article.title, article.description || ''),
+          importance: 'Medium',
+          summary: [article.description || ''],
+          relevanceScore: 75,
+          cleanedTitle: article.title,
+          sector: 'Finance',
+          country: 'Global'
+        };
+
+        processedArticles.push({
+          ...article,
+          title: aiResult.cleanedTitle || article.title,
+          sentiment: aiResult.sentiment,
+          relevanceScore: aiResult.relevanceScore,
+          importanceScore: aiResult.importance,
+          summary: aiResult.summary && aiResult.summary.length > 0 ? aiResult.summary : [article.description || ''],
+          category: classifyCategory(article.title, article.description || ''),
+          sector: aiResult.sector || 'Finance',
+          country: aiResult.country || 'Global'
+        });
       });
+
     } catch (error) {
       console.error('[FinScope AI] Error processing batch with Gemini. Falling back to heuristics:', error);
       
@@ -161,7 +161,7 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
           importanceScore: relevance.score > 70 ? 'High' : 'Medium',
           summary: summary.length > 0 ? summary : [article.description || ''],
           category: classifyCategory(article.title, article.description || ''),
-          sector: 'Markets',
+          sector: 'Finance',
           country: 'Global'
         });
       });
