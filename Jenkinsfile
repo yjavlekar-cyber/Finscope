@@ -32,5 +32,13 @@ pipeline {
                 sh "docker run -d -p 3000:3000 --name finscope-app ${DOCKER_HUB_USER}/${Image}:latest"
                 }
             }
+	    stage("Deploy to Render") {
+            steps {
+               // This 'curl' command pings Render to start the update
+              // PASTE YOUR URL BELOW INSIDE THE QUOTES
+              sh "curl -X POST 'https://api.render.com/deploy/srv-d8d89v0js32c73fac2m0?key=Jhb9K1X-i6c'"
+          }
+     }
+		
         }
 }
