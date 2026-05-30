@@ -110,6 +110,7 @@ function generateSparklinePoints(base: number, currentChangePercent: number, len
  * S&P 500 -> SPY, NASDAQ -> QQQ, DOW -> DIA
  */
 async function fetchLiveFinnhubQuotes(apiKey: string): Promise<MarketAsset[] | null> {
+  const now = Date.now();
   const symbolMap = [
     { symbol: 'SPY', name: 'S&P 500 ETF (SPY)', displaySymbol: '.INX', category: 'Indices' as const },
     { symbol: 'QQQ', name: 'NASDAQ 100 ETF (QQQ)', displaySymbol: '.IXIC', category: 'Indices' as const },
