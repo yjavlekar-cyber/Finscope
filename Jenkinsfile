@@ -10,6 +10,7 @@ pipeline {
             steps {
                 sh "docker build -t ${DOCKER_HUB_USER}/${Image}:latest ."
             }
+	}
         stage ("push") {
             steps { 
                 script{
