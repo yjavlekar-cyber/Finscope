@@ -15,7 +15,7 @@ const CACHE_DURATION = 3 * 60 * 1000; // 3 minutes cache (180,000 ms)
 
 // Simple Token-Bucket Rate Limiter
 const ipBuckets = new Map<string, { tokens: number; lastRefill: number }>();
-const RATE_LIMIT_TOKENS = 15;
+const RATE_LIMIT_TOKENS = 45;
 const REFILL_RATE_MS = 60 * 1000; // Refill over 1 minute
 
 function checkRateLimit(ip: string): boolean {
@@ -44,8 +44,11 @@ function checkRateLimit(ip: string): boolean {
 }
 
 export async function GET(request: Request) {
-  // Extract client IP for rate limiting
-  const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+  // Extract client IP for rate limiting, splitting commas from load-balancer proxies
+  let ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+  if (ip.includes(',')) {
+    ip = ip.split(',')[0].trim();
+  }
   
   if (!checkRateLimit(ip)) {
     return NextResponse.json(

@@ -10,6 +10,7 @@ interface HeaderProps {
 
 export default function Header({ searchQuery, setSearchQuery }: HeaderProps) {
   const [time, setTime] = useState<string>('');
+  const [formattedDate, setFormattedDate] = useState<string>('');
 
   useEffect(() => {
     function updateClock() {
@@ -28,15 +29,15 @@ export default function Header({ searchQuery, setSearchQuery }: HeaderProps) {
     return () => clearInterval(interval);
   }, []);
 
-  const getFormattedDate = () => {
+  useEffect(() => {
     const options: Intl.DateTimeFormatOptions = {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     };
-    return new Date().toLocaleDateString('en-US', options).toUpperCase();
-  };
+    setFormattedDate(new Date().toLocaleDateString('en-US', options).toUpperCase());
+  }, []);
 
   return (
     <header className="w-full bg-zinc-950 border-b border-zinc-900 pt-6 pb-4 px-4 sm:px-8 select-none relative">
@@ -51,12 +52,12 @@ export default function Header({ searchQuery, setSearchQuery }: HeaderProps) {
           
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 text-emerald-400 bg-emerald-950/20 border border-emerald-900/40 py-0.5 px-2 rounded-full">
-              <ShieldCheck className="w-3 h-3" />
+              <ShieldCheck className="w-3.5 h-3.5" />
               <span>AD-FREE PLATFORM</span>
             </div>
             
             <div className="flex items-center gap-1.5 text-zinc-400">
-              <Clock className="w-3 h-3 text-zinc-500" />
+              <Clock className="w-3.5 h-3.5 text-zinc-500" />
               <span>UTC {time || '--:--:--'}</span>
             </div>
           </div>
@@ -75,7 +76,7 @@ export default function Header({ searchQuery, setSearchQuery }: HeaderProps) {
         {/* Date line & Search bar Section */}
         <div className="w-full flex flex-col md:flex-row justify-between items-center border-t border-b border-zinc-900 py-3 gap-4">
           <div className="text-[11px] font-bold text-zinc-400 font-serif tracking-widest text-center md:text-left">
-            {getFormattedDate()}
+            {formattedDate || 'LOADING DATE...'}
           </div>
 
           {/* Search Input Container */}
