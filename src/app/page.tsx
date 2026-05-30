@@ -16,6 +16,7 @@ export default function Home() {
   const [dynamicStocks, setDynamicStocks] = useState<MarketAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchingStocks, setSearchingStocks] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Search, Category, Sector, Country and Sorting State
@@ -98,11 +99,12 @@ export default function Home() {
   // Handle searching for dynamic stock symbols
   useEffect(() => {
     const query = searchQuery.trim().toUpperCase();
-    // Logic to detect if it's a potential ticker (1-5 chars, alphanumeric)
-    if (query.length >= 1 && query.length <= 5 && /^[A-Z0-9.]+$/.test(query)) {
+    // Logic to detect if it's a potential ticker or company name (1-12 chars, alphanumeric)
+    if (query.length >= 1 && query.length <= 12 && /^[A-Z0-9.]+$/.test(query)) {
       // Check if we already have it in marketAssets or dynamicStocks
-      const exists = [...marketAssets, ...dynamicStocks].some(s => s.symbol === query);
+      const exists = [...marketAssets, ...dynamicStocks].some(s => s.symbol === query || s.name.toUpperCase().includes(query));
       if (!exists) {
+        setSearchingStocks(true);
         const timer = setTimeout(async () => {
           try {
             const res = await fetch(`/api/market?symbol=${query}`);
@@ -112,10 +114,14 @@ export default function Home() {
             }
           } catch (e) {
             console.error('Failed to fetch dynamic symbol:', e);
+          } finally {
+            setSearchingStocks(false);
           }
         }, 600); // Debounce lookup
         return () => clearTimeout(timer);
       }
+    } else {
+      setSearchingStocks(false);
     }
   }, [searchQuery, marketAssets, dynamicStocks]);
 
@@ -331,31 +337,33 @@ export default function Home() {
                     </div>
 
                     {/* Matched Stocks Row */}
-                    {matchedStocks.length > 0 && (
+                    {(matchedStocks.length > 0 || searchingStocks) && (
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase tracking-widest px-1">
-                          <RefreshCw className="w-3 h-3" />
-                          <span>Matched Market Assets</span>
+                          {searchingStocks ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          <span>{searchingStocks ? 'Syncing Market Data...' : 'Matched Market Assets'}</span>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                          {matchedStocks.map((stock) => {
-                            const isPositive = stock.changePercent >= 0;
-                            return (
-                              <div key={stock.symbol} className="bg-zinc-900/40 border border-zinc-800 p-3 rounded flex justify-between items-center group hover:border-zinc-700 transition-all">
-                                <div>
-                                  <div className="text-xs font-mono font-bold text-zinc-100">{stock.symbol}</div>
-                                  <div className="text-[10px] text-zinc-500 font-mono truncate max-w-[100px]">{stock.name}</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-xs font-mono font-bold text-zinc-100">{stock.price.toFixed(2)}</div>
-                                  <div className={`text-[10px] font-mono font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {isPositive ? '+' : ''}{stock.changePercent.toFixed(2)}%
+                        {matchedStocks.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                            {matchedStocks.map((stock) => {
+                              const isPositive = stock.changePercent >= 0;
+                              return (
+                                <div key={stock.symbol} className="bg-zinc-900/40 border border-zinc-800 p-3 rounded flex justify-between items-center group hover:border-zinc-700 transition-all">
+                                  <div>
+                                    <div className="text-xs font-mono font-bold text-zinc-100">{stock.symbol}</div>
+                                    <div className="text-[10px] text-zinc-500 font-mono truncate max-w-[100px]">{stock.name}</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-xs font-mono font-bold text-zinc-100">{stock.price.toFixed(2)}</div>
+                                    <div className={`text-[10px] font-mono font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                      {isPositive ? '+' : ''}{stock.changePercent.toFixed(2)}%
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
 
