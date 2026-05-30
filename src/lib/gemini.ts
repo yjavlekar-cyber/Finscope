@@ -92,7 +92,7 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: {
@@ -119,7 +119,13 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
         throw new Error('Gemini API returned an empty candidate or body structure');
       }
 
-      const aiResults: AIBatchResult[] = JSON.parse(rawText.trim());
+      let aiResults: AIBatchResult[] = [];
+      try {
+        const parsed = JSON.parse(rawText.trim());
+        aiResults = Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.error('[FinScope AI] Failed to parse AI response as array:', e);
+      }
 
       batch.forEach((article, index) => {
         const aiResult = aiResults.find(r => r.index === index) || {

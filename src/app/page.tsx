@@ -250,7 +250,12 @@ export default function Home() {
       <TickerTape />
 
       {/* Main Classical Header */}
-      <Header searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+      <Header 
+        searchQuery={searchQuery} 
+        setSearchQuery={setSearchQuery} 
+        matchedStocks={matchedStocks}
+        searchingStocks={searchingStocks}
+      />
 
       {/* Categories & Sorting Filters */}
       <FilterBar
@@ -326,53 +331,22 @@ export default function Home() {
               // Full Editorial Print Layout
               <div className="flex flex-col gap-10">
                 
-                {/* 1. Integrated Search Results (Stocks + News) */}
+                {/* 1. Integrated Search Results (News Only - Stocks are in Dropdown) */}
                 {searchQuery && (
                   <section className="flex flex-col gap-6">
                     <div className="flex items-center gap-2 mb-2 border-b border-zinc-900 pb-3">
                       <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
                       <h3 className="text-xs font-mono font-bold text-zinc-400 tracking-wider uppercase">
-                        Unified Search Results: "{searchQuery}"
+                        Financial News Search: "{searchQuery}"
                       </h3>
                     </div>
 
-                    {/* Matched Stocks Row */}
-                    {(matchedStocks.length > 0 || searchingStocks) && (
+                    {/* Matched Articles Grid */}
+                    {filteredArticles.length > 0 ? (
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase tracking-widest px-1">
-                          {searchingStocks ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                          <span>{searchingStocks ? 'Syncing Market Data...' : 'Matched Market Assets'}</span>
-                        </div>
-                        {matchedStocks.length > 0 && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                            {matchedStocks.map((stock) => {
-                              const isPositive = stock.changePercent >= 0;
-                              return (
-                                <div key={stock.symbol} className="bg-zinc-900/40 border border-zinc-800 p-3 rounded flex justify-between items-center group hover:border-zinc-700 transition-all">
-                                  <div>
-                                    <div className="text-xs font-mono font-bold text-zinc-100">{stock.symbol}</div>
-                                    <div className="text-[10px] text-zinc-500 font-mono truncate max-w-[100px]">{stock.name}</div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="text-xs font-mono font-bold text-zinc-100">{stock.price.toFixed(2)}</div>
-                                    <div className={`text-[10px] font-mono font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                      {isPositive ? '+' : ''}{stock.changePercent.toFixed(2)}%
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Matched Articles Grid */}
-                    {filteredArticles.length > 0 && (
-                      <div className="flex flex-col gap-3 mt-4">
-                        <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase tracking-widest px-1">
                           <FileText className="w-3 h-3" />
-                          <span>Related Financial News</span>
+                          <span>Related Intelligence Reports</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           {filteredArticles.map((article) => (
@@ -383,6 +357,10 @@ export default function Home() {
                             />
                           ))}
                         </div>
+                      </div>
+                    ) : (
+                      <div className="p-12 text-center border border-dashed border-zinc-900 rounded">
+                        <p className="text-[11px] font-mono text-zinc-500">NO NEWS REPORTS MATCHED THIS QUERY.</p>
                       </div>
                     )}
                   </section>

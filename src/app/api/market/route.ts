@@ -3,7 +3,7 @@ import { MarketAsset } from '@/lib/types';
 
 // Cache for market data
 let marketCache: { data: MarketAsset[]; timestamp: number } | null = null;
-const CACHE_DURATION = 15000; // 15 seconds cache
+const CACHE_DURATION = 2000; // Aggressive 2-second cache for true "live" feel
 
 /**
  * Generates deterministic mock market values that fluctuate based on current time
@@ -21,7 +21,7 @@ function getDeterministicMockMarkets(): MarketAsset[] {
   const sp500Price = 5280.15 * (1 + wave1 + wave2);
   const nasdaqPrice = 16840.40 * (1 - wave1 + wave2 * 1.5);
   const dowPrice = 39070.80 * (1 + wave2 * 0.8);
-  const btcPrice = 67250.00 * (1 + cryptoWave);
+  const btcPrice = 75250.00 * (1 + cryptoWave);
   const goldPrice = 2345.60 * (1 - wave2 * 0.3);
   const crudeOilPrice = 77.80 * (1 + wave1 * 0.5);
 
@@ -67,7 +67,7 @@ function getDeterministicMockMarkets(): MarketAsset[] {
       change: parseFloat((btcPrice * btcChangePercent / 100).toFixed(2)),
       changePercent: parseFloat(btcChangePercent.toFixed(2)),
       category: 'Crypto',
-      sparkline: generateSparklinePoints(67250, btcChangePercent, 12)
+      sparkline: generateSparklinePoints(75250, btcChangePercent, 12)
     },
     {
       symbol: 'GC=F',
@@ -163,7 +163,9 @@ async function fetchLiveFinnhubQuotes(apiKey: string): Promise<MarketAsset[] | n
     };
 
     try {
-      const cryptoRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true');
+      const cryptoRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&_=${now}`, {
+        cache: 'no-store'
+      });
       if (cryptoRes.ok) {
         const cryptoData = await cryptoRes.json();
         if (cryptoData.bitcoin) {
@@ -217,29 +219,38 @@ export async function GET(request: Request) {
     let asset: MarketAsset | null = null;
     
     if (finnhubKey) {
-      try {
-        const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${querySymbol}&token=${finnhubKey}`);
-        const quote = await res.json();
-        if (quote.c && quote.c !== 0) {
-          asset = {
-            symbol: querySymbol,
-            name: `${querySymbol} Inc.`,
-            price: parseFloat(quote.c.toFixed(2)),
-            change: parseFloat(quote.d.toFixed(2)),
-            changePercent: parseFloat(quote.dp.toFixed(2)),
-            category: 'Stocks',
-            sparkline: generateSparklinePoints(quote.c, quote.dp)
-          };
+      const symbolsToTry = [querySymbol];
+      // If it's a potential Indian stock query and doesn't have a suffix, try .NS
+      if (!querySymbol.includes('.')) {
+        symbolsToTry.push(`${querySymbol}.NS`);
+      }
+
+      for (const sym of symbolsToTry) {
+        try {
+          const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${finnhubKey}`);
+          const quote = await res.json();
+          if (quote.c && quote.c !== 0) {
+            asset = {
+              symbol: sym,
+              name: sym.endsWith('.NS') ? `${sym.replace('.NS', '')} (NSE India)` : `${sym} Corp.`,
+              price: parseFloat(quote.c.toFixed(2)),
+              change: parseFloat(quote.d.toFixed(2)),
+              changePercent: parseFloat(quote.dp.toFixed(2)),
+              category: 'Stocks',
+              sparkline: generateSparklinePoints(quote.c, quote.dp)
+            };
+            break;
+          }
+        } catch (e) {
+          console.error(`[FinScope Market] Live fetch failed for ${sym}:`, e);
         }
-      } catch (e) {
-        console.error(`[FinScope Market] Error fetching specific symbol ${querySymbol}:`, e);
       }
     }
 
-    // Deterministic mock for ANY searched symbol if API fails
+    // Fallback Mock ONLY if API fails
     if (!asset) {
       const basePrice = Math.abs(querySymbol.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 500) + 50;
-      const fluctuation = Math.sin(now / 10000) * 2;
+      const fluctuation = Math.sin(now / 5000) * 2;
       asset = {
         symbol: querySymbol,
         name: `${querySymbol} Common Stock`,
@@ -254,7 +265,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ asset });
   }
 
-  // Standard multi-asset fetch
+  // Aggressive 2-second cache check for main ticker list
   if (marketCache && (now - marketCache.timestamp < CACHE_DURATION)) {
     return NextResponse.json({ assets: marketCache.data, cached: true });
   }
@@ -266,6 +277,7 @@ export async function GET(request: Request) {
   }
 
   if (!assets) {
+    console.log('[FinScope Market] All live APIs unreachable. Using mock data.');
     assets = getDeterministicMockMarkets();
   }
 
