@@ -206,11 +206,55 @@ async function fetchLiveFinnhubQuotes(apiKey: string): Promise<MarketAsset[] | n
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const querySymbol = searchParams.get('symbol')?.toUpperCase();
   const finnhubKey = process.env.FINNHUB_API_KEY;
   const now = Date.now();
 
-  // Check cache
+  // Handle single symbol lookup
+  if (querySymbol) {
+    let asset: MarketAsset | null = null;
+    
+    if (finnhubKey) {
+      try {
+        const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${querySymbol}&token=${finnhubKey}`);
+        const quote = await res.json();
+        if (quote.c && quote.c !== 0) {
+          asset = {
+            symbol: querySymbol,
+            name: `${querySymbol} Inc.`,
+            price: parseFloat(quote.c.toFixed(2)),
+            change: parseFloat(quote.d.toFixed(2)),
+            changePercent: parseFloat(quote.dp.toFixed(2)),
+            category: 'Stocks',
+            sparkline: generateSparklinePoints(quote.c, quote.dp)
+          };
+        }
+      } catch (e) {
+        console.error(`[FinScope Market] Error fetching specific symbol ${querySymbol}:`, e);
+      }
+    }
+
+    // Deterministic mock for ANY searched symbol if API fails
+    if (!asset) {
+      const basePrice = Math.abs(querySymbol.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 500) + 50;
+      const fluctuation = Math.sin(now / 10000) * 2;
+      asset = {
+        symbol: querySymbol,
+        name: `${querySymbol} Common Stock`,
+        price: parseFloat((basePrice + fluctuation).toFixed(2)),
+        change: parseFloat(fluctuation.toFixed(2)),
+        changePercent: parseFloat(((fluctuation / basePrice) * 100).toFixed(2)),
+        category: 'Stocks',
+        sparkline: generateSparklinePoints(basePrice, (fluctuation / basePrice) * 100)
+      };
+    }
+
+    return NextResponse.json({ asset });
+  }
+
+  // Standard multi-asset fetch
   if (marketCache && (now - marketCache.timestamp < CACHE_DURATION)) {
     return NextResponse.json({ assets: marketCache.data, cached: true });
   }
@@ -221,7 +265,6 @@ export async function GET() {
     assets = await fetchLiveFinnhubQuotes(finnhubKey);
   }
 
-  // Fallback to beautiful ticking deterministic assets if no key or API failed
   if (!assets) {
     assets = getDeterministicMockMarkets();
   }

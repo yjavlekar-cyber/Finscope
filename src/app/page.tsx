@@ -7,18 +7,22 @@ import FilterBar from '@/components/FilterBar';
 import NewsCard from '@/components/NewsCard';
 import MarketOverview from '@/components/MarketOverview';
 import ArticleReaderModal from '@/components/ArticleReaderModal';
-import { NewsArticle } from '@/lib/types';
-import { RefreshCw, FileText, Info, Loader2, Sparkles, WifiOff } from 'lucide-react';
+import { NewsArticle, MarketAsset } from '@/lib/types';
+import { RefreshCw, FileText, Info, Loader2, Sparkles, WifiOff, ArrowRight } from 'lucide-react';
 
 export default function Home() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [marketAssets, setMarketAssets] = useState<MarketAsset[]>([]);
+  const [dynamicStocks, setDynamicStocks] = useState<MarketAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Search, Category, and Sorting State
+  // Search, Category, Sector, Country and Sorting State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedSector, setSelectedSector] = useState('All Sectors');
+  const [selectedCountry, setSelectedCountry] = useState('All Regions');
   const [sortBy, setSortBy] = useState<'Latest' | 'Importance' | 'Relevance'>('Latest');
   
   // Modals & Timestamps
@@ -58,74 +62,180 @@ export default function Home() {
     }
   }
 
-  // Initial load and 60 seconds auto-polling
+  // Fetch market assets
+  async function fetchMarkets() {
+    try {
+      const res = await fetch('/api/market');
+      if (res.ok) {
+        const data = await res.json();
+        setMarketAssets(data.assets || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch market data:', err);
+    }
+  }
+
+  // Initial load and auto-polling
   useEffect(() => {
     fetchNews(false);
+    fetchMarkets();
     
-    const interval = setInterval(() => {
+    const newsInterval = setInterval(() => {
       console.log('[FinScope Poller] Running automatic news synchronization...');
       fetchNews(false);
-    }, 60000); // 60s auto refresh
+    }, 60000);
 
-    return () => clearInterval(interval);
+    const marketInterval = setInterval(() => {
+      fetchMarkets();
+    }, 15000);
+
+    return () => {
+      clearInterval(newsInterval);
+      clearInterval(marketInterval);
+    };
   }, []);
 
+  // Handle searching for dynamic stock symbols
+  useEffect(() => {
+    const query = searchQuery.trim().toUpperCase();
+    // Logic to detect if it's a potential ticker (1-5 chars, alphanumeric)
+    if (query.length >= 1 && query.length <= 5 && /^[A-Z0-9.]+$/.test(query)) {
+      // Check if we already have it in marketAssets or dynamicStocks
+      const exists = [...marketAssets, ...dynamicStocks].some(s => s.symbol === query);
+      if (!exists) {
+        const timer = setTimeout(async () => {
+          try {
+            const res = await fetch(`/api/market?symbol=${query}`);
+            const data = await res.json();
+            if (data.asset) {
+              setDynamicStocks(prev => [...prev, data.asset]);
+            }
+          } catch (e) {
+            console.error('Failed to fetch dynamic symbol:', e);
+          }
+        }, 600); // Debounce lookup
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [searchQuery, marketAssets, dynamicStocks]);
+
   // Filtered & Sorted Articles calculation
-  const processedArticles = useMemo(() => {
-    let result = [...articles];
+  const { filteredArticles, matchedStocks } = useMemo(() => {
+    let artResults = [...articles];
+    let stockResults: MarketAsset[] = [];
 
     // 1. Category Filter
     if (selectedCategory !== 'All') {
-      result = result.filter(
+      artResults = artResults.filter(
         (a) => a.category.toLowerCase() === selectedCategory.toLowerCase()
       );
     }
 
-    // 2. Search query filter (checks Title, Description, and Source)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      result = result.filter(
-        (a) =>
-          a.title.toLowerCase().includes(query) ||
-          (a.description || '').toLowerCase().includes(query) ||
-          a.sourceName.toLowerCase().includes(query)
+    // 2. Sector Filter
+    if (selectedSector !== 'All Sectors') {
+      artResults = artResults.filter(
+        (a) => a.sector?.toLowerCase() === selectedSector.toLowerCase()
       );
     }
 
-    // 3. Sorting Mechanics
+    // 3. Country Filter
+    if (selectedCountry !== 'All Regions') {
+      artResults = artResults.filter(
+        (a) => a.country?.toLowerCase() === selectedCountry.toLowerCase()
+      );
+    }
+
+    // 4. Search query filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      artResults = artResults.filter(
+        (a) =>
+          a.title.toLowerCase().includes(query) ||
+          (a.description || '').toLowerCase().includes(query) ||
+          a.sourceName.toLowerCase().includes(query) ||
+          (a.sector || '').toLowerCase().includes(query) ||
+          (a.country || '').toLowerCase().includes(query)
+      );
+
+      // Search across both curated list and dynamically discovered stocks
+      stockResults = [...marketAssets, ...dynamicStocks].filter(
+        (s) =>
+          s.symbol.toLowerCase().includes(query) ||
+          s.name.toLowerCase().includes(query)
+      );
+    }
+
+    // 5. Sorting Mechanics
     if (sortBy === 'Importance') {
-      // High importance first, then Medium, then Low. Keep chronological inside each tier.
       const priority = { High: 3, Medium: 2, Low: 1 };
-      result.sort((a, b) => {
+      artResults.sort((a, b) => {
         const diff = priority[b.importanceScore] - priority[a.importanceScore];
         if (diff !== 0) return diff;
         return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
       });
     } else if (sortBy === 'Relevance') {
-      // Sort strictly by computed relevance density percentage
-      result.sort((a, b) => b.relevanceScore - a.relevanceScore);
+      artResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
     } else {
-      // Default: Latest chronological first
-      result.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+      artResults.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     }
 
-    return result;
-  }, [articles, selectedCategory, searchQuery, sortBy]);
+    return { filteredArticles: artResults, matchedStocks: stockResults };
+  }, [articles, marketAssets, dynamicStocks, selectedCategory, selectedSector, selectedCountry, searchQuery, sortBy]);
 
-  // Extract spotlight "Lead Editorial" article (Highest importance breaking piece in current view)
+  // Extract spotlight "Lead Editorial" article
   const spotlightArticle = useMemo(() => {
-    if (processedArticles.length === 0) return null;
-    
-    // Look for first breaking/High article in active set, default to first item
-    const highImportance = processedArticles.find(a => a.importanceScore === 'High');
-    return highImportance || processedArticles[0];
-  }, [processedArticles]);
+    if (filteredArticles.length === 0) return null;
+    const highImportance = filteredArticles.find(a => a.importanceScore === 'High');
+    return highImportance || filteredArticles[0];
+  }, [filteredArticles]);
 
-  // Rest of grid articles (excludes the featured spotlight editorial)
-  const gridArticles = useMemo(() => {
-    if (!spotlightArticle) return [];
-    return processedArticles.filter(a => a.id !== spotlightArticle.id);
-  }, [processedArticles, spotlightArticle]);
+  // Group remaining articles by section for the elegant frontpage layout
+  const sectionedArticles = useMemo(() => {
+    const groups = {
+      markets: {
+        title: 'Markets & Corporate Finance',
+        filterTarget: 'Markets',
+        categories: ['Markets', 'Stocks'],
+        items: [] as NewsArticle[]
+      },
+      crypto: {
+        title: 'Decentralized Finance & Digital Assets',
+        filterTarget: 'Crypto',
+        categories: ['Crypto'],
+        items: [] as NewsArticle[]
+      },
+      macro: {
+        title: 'Macroeconomics & Global Policy',
+        filterTarget: 'Economy',
+        categories: ['Economy', 'Banking', 'Global Finance'],
+        items: [] as NewsArticle[]
+      },
+      vc: {
+        title: 'Venture Capital & Public Listings',
+        filterTarget: 'Startups',
+        categories: ['Startups', 'IPO'],
+        items: [] as NewsArticle[]
+      }
+    };
+
+    const listToDistribute = spotlightArticle && !searchQuery 
+      ? filteredArticles.filter(a => a.id !== spotlightArticle.id)
+      : filteredArticles;
+
+    listToDistribute.forEach(article => {
+      if (groups.markets.categories.includes(article.category)) {
+        groups.markets.items.push(article);
+      } else if (groups.crypto.categories.includes(article.category)) {
+        groups.crypto.items.push(article);
+      } else if (groups.macro.categories.includes(article.category)) {
+        groups.macro.items.push(article);
+      } else if (groups.vc.categories.includes(article.category)) {
+        groups.vc.items.push(article);
+      }
+    });
+
+    return groups;
+  }, [filteredArticles, spotlightArticle, searchQuery]);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col antialiased selection:bg-zinc-100 selection:text-black">
@@ -140,6 +250,10 @@ export default function Home() {
       <FilterBar
         selectedCategory={selectedCategory}
         setSelectedCategory={setSelectedCategory}
+        selectedSector={selectedSector}
+        setSelectedSector={setSelectedSector}
+        selectedCountry={selectedCountry}
+        setSelectedCountry={setSelectedCountry}
         sortBy={sortBy}
         setSortBy={setSortBy}
       />
@@ -182,18 +296,20 @@ export default function Home() {
                   <span>RE-CONNECT FEEDS</span>
                 </button>
               </div>
-            ) : processedArticles.length === 0 ? (
+            ) : filteredArticles.length === 0 && matchedStocks.length === 0 ? (
               // Empty search/filter state
               <div className="border border-dashed border-zinc-900 bg-zinc-950/20 rounded p-16 text-center flex flex-col items-center select-none">
                 <FileText className="w-10 h-10 text-zinc-600 mb-4" />
                 <h3 className="text-xs font-mono font-bold text-zinc-400">NO FINANCIAL DEBITS RECORDED</h3>
                 <p className="text-zinc-500 text-[11px] mt-2 max-w-xs leading-relaxed font-mono">
-                  Zero articles matching category "{selectedCategory.toUpperCase()}" with query "{searchQuery}" have bypassed AI validation.
+                  Zero results matching filter/query have bypassed AI validation.
                 </p>
                 <button
                   onClick={() => {
                     setSearchQuery('');
                     setSelectedCategory('All');
+                    setSelectedSector('All Sectors');
+                    setSelectedCountry('All Regions');
                   }}
                   className="mt-6 text-[10px] font-mono py-1 px-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded cursor-pointer transition-colors"
                 >
@@ -202,10 +318,70 @@ export default function Home() {
               </div>
             ) : (
               // Full Editorial Print Layout
-              <div className="flex flex-col gap-8">
+              <div className="flex flex-col gap-10">
                 
-                {/* 1. Lead Editorial Spotlight Hero */}
-                {spotlightArticle && !searchQuery && (
+                {/* 1. Integrated Search Results (Stocks + News) */}
+                {searchQuery && (
+                  <section className="flex flex-col gap-6">
+                    <div className="flex items-center gap-2 mb-2 border-b border-zinc-900 pb-3">
+                      <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                      <h3 className="text-xs font-mono font-bold text-zinc-400 tracking-wider uppercase">
+                        Unified Search Results: "{searchQuery}"
+                      </h3>
+                    </div>
+
+                    {/* Matched Stocks Row */}
+                    {matchedStocks.length > 0 && (
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase tracking-widest px-1">
+                          <RefreshCw className="w-3 h-3" />
+                          <span>Matched Market Assets</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                          {matchedStocks.map((stock) => {
+                            const isPositive = stock.changePercent >= 0;
+                            return (
+                              <div key={stock.symbol} className="bg-zinc-900/40 border border-zinc-800 p-3 rounded flex justify-between items-center group hover:border-zinc-700 transition-all">
+                                <div>
+                                  <div className="text-xs font-mono font-bold text-zinc-100">{stock.symbol}</div>
+                                  <div className="text-[10px] text-zinc-500 font-mono truncate max-w-[100px]">{stock.name}</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs font-mono font-bold text-zinc-100">{stock.price.toFixed(2)}</div>
+                                  <div className={`text-[10px] font-mono font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {isPositive ? '+' : ''}{stock.changePercent.toFixed(2)}%
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Matched Articles Grid */}
+                    {filteredArticles.length > 0 && (
+                      <div className="flex flex-col gap-3 mt-4">
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase tracking-widest px-1">
+                          <FileText className="w-3 h-3" />
+                          <span>Related Financial News</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {filteredArticles.map((article) => (
+                            <NewsCard
+                              key={article.id}
+                              article={article}
+                              onReadMore={setActiveArticle}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {/* 2. Lead Editorial Spotlight Hero (Only shown on "All" view to ground page design) */}
+                {spotlightArticle && selectedCategory === 'All' && selectedSector === 'All Sectors' && selectedCountry === 'All Regions' && !searchQuery && (
                   <section className="w-full bg-zinc-950 border border-zinc-900 rounded-md overflow-hidden hover:border-zinc-800 transition-colors duration-200">
                     <div className="grid grid-cols-1 md:grid-cols-5">
                       
@@ -222,6 +398,12 @@ export default function Home() {
                             <span className="text-[10px] text-zinc-500 font-mono">
                               {spotlightArticle.sourceName.toUpperCase()}
                             </span>
+
+                            {spotlightArticle.country && (
+                              <span className="text-[9px] text-zinc-400 font-mono border border-zinc-800 px-1.5 rounded uppercase">
+                                {spotlightArticle.country}
+                              </span>
+                            )}
                           </div>
 
                           {/* Hero title */}
@@ -255,6 +437,7 @@ export default function Home() {
                         <div className="mt-8 pt-4 border-t border-zinc-900/60 flex justify-between items-center select-none">
                           <div className="text-[10px] font-mono text-zinc-500">
                             RELEVANCE MATCH: <span className="font-bold text-zinc-300">{spotlightArticle.relevanceScore}%</span>
+                            {spotlightArticle.sector && <span className="ml-3 opacity-60">| {spotlightArticle.sector.toUpperCase()}</span>}
                           </div>
 
                           <button
@@ -285,23 +468,79 @@ export default function Home() {
                   </section>
                 )}
 
-                {/* 2. Secondary Editorial Grid */}
-                <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {gridArticles.map((article) => (
-                    <NewsCard
-                      key={article.id}
-                      article={article}
-                      onReadMore={setActiveArticle}
-                    />
-                  ))}
-                </section>
+                {/* 3. Structured Newspaper Layout vs Focused Filter Layout */}
+                {selectedCategory === 'All' && selectedSector === 'All Sectors' && selectedCountry === 'All Regions' && !searchQuery ? (
+                  // BEAUTIFUL PRINT CATEGORY COLUMNS
+                  <div className="flex flex-col gap-12">
+                    {Object.entries(sectionedArticles).map(([key, group]) => {
+                      if (group.items.length === 0) return null;
+                      
+                      return (
+                        <section key={key} className="flex flex-col border-t border-zinc-900 pt-8 select-none">
+                          {/* Section Title & Jump Navigation Link */}
+                          <div className="flex justify-between items-end mb-6">
+                            <h3 className="text-sm font-mono font-bold tracking-[0.2em] text-zinc-200 uppercase flex items-center gap-2">
+                              <span className="h-2 w-2 bg-zinc-300 rounded-sm" />
+                              {group.title}
+                            </h3>
+                            
+                            <button
+                              onClick={() => setSelectedCategory(group.filterTarget)}
+                              className="text-[10px] font-mono font-bold text-zinc-500 hover:text-zinc-200 transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>VIEW ALL</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Sub-grid (Max 4 items to keep the page clean and perfectly balanced) */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {group.items.slice(0, 4).map((article) => (
+                              <NewsCard
+                                key={article.id}
+                                article={article}
+                                onReadMore={setActiveArticle}
+                              />
+                            ))}
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  // FOCUSED SINGLE COLUMN VIEW (Used when filters or search are active)
+                  !searchQuery && (
+                    <section className="flex flex-col select-none">
+                      <div className="flex items-center gap-2 mb-6 border-b border-zinc-900 pb-3">
+                        <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />
+                        <h3 className="text-xs font-mono font-bold text-zinc-400 tracking-wider uppercase">
+                          FOCUSED NEWS DESK — {
+                            selectedSector !== 'All Sectors' ? selectedSector : 
+                            selectedCountry !== 'All Regions' ? selectedCountry :
+                            selectedCategory
+                          }
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {filteredArticles.map((article) => (
+                          <NewsCard
+                            key={article.id}
+                            article={article}
+                            onReadMore={setActiveArticle}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )
+                )}
 
               </div>
             )}
 
           </div>
 
-          {/* Markets sidebar (1 Col wide) */}
+          {/* Markets watch sidebar (1 Col wide) */}
           <div className="lg:col-span-1 flex flex-col gap-6">
             
             {/* Quick Informational Notice */}

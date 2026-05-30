@@ -8,6 +8,8 @@ interface AIBatchResult {
   summary: string[];
   relevanceScore: number;
   cleanedTitle: string;
+  sector: string;
+  country: string;
 }
 
 /**
@@ -42,7 +44,9 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
         relevanceScore: relevance.score,
         importanceScore: importance,
         summary: summary.length > 0 ? summary : [article.description || 'No further description available.'],
-        category: classifyCategory(article.title, article.description || '')
+        category: classifyCategory(article.title, article.description || ''),
+        sector: 'General Finance',
+        country: 'Global'
       };
     });
   }
@@ -68,6 +72,8 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
     Determine the financial sentiment (Bullish, Bearish, or Neutral) and importance level (High, Medium, or Low).
     Provide a relevance score (0-100) indicating how strictly relevant it is to markets/finance.
     Provide exactly 3 bullet-point highlights summarizing the macroeconomic or microeconomic impact (max 15 words per bullet).
+    Identify the Sector (e.g., Technology, Healthcare, Energy, Finance, Consumer, Crypto, Manufacturing).
+    Identify the Country/Region (e.g., USA, UK, India, China, Europe, Global).
 
     Input articles:
     ${JSON.stringify(batchPayload, null, 2)}
@@ -80,6 +86,8 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
       summary: string[];
       relevanceScore: number;
       cleanedTitle: string;
+      sector: string;
+      country: string;
     }>`;
 
     try {
@@ -119,7 +127,9 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
           importance: 'Medium',
           summary: [article.description || ''],
           relevanceScore: 75,
-          cleanedTitle: article.title
+          cleanedTitle: article.title,
+          sector: 'Markets',
+          country: 'Global'
         };
 
         processedArticles.push({
@@ -129,7 +139,9 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
           relevanceScore: aiResult.relevanceScore,
           importanceScore: aiResult.importance,
           summary: aiResult.summary && aiResult.summary.length > 0 ? aiResult.summary : [article.description || ''],
-          category: classifyCategory(article.title, article.description || '')
+          category: classifyCategory(article.title, article.description || ''),
+          sector: aiResult.sector || 'Markets',
+          country: aiResult.country || 'Global'
         });
       });
 
@@ -148,7 +160,9 @@ export async function enrichArticlesWithAI(articles: NewsArticle[]): Promise<New
           relevanceScore: relevance.score,
           importanceScore: relevance.score > 70 ? 'High' : 'Medium',
           summary: summary.length > 0 ? summary : [article.description || ''],
-          category: classifyCategory(article.title, article.description || '')
+          category: classifyCategory(article.title, article.description || ''),
+          sector: 'Markets',
+          country: 'Global'
         });
       });
     }

@@ -83,9 +83,21 @@ export default function NewsCard({ article, onReadMore }: NewsCardProps) {
           </div>
         )}
 
-        {/* Dynamic Category Tag */}
-        <div className="absolute bottom-2.5 left-2.5 bg-black/80 backdrop-blur-sm border border-zinc-800 text-zinc-300 text-[9px] font-mono py-0.5 px-2 rounded">
-          {article.category.toUpperCase()}
+        {/* Dynamic Tags Row */}
+        <div className="absolute bottom-2.5 left-2.5 flex gap-1.5">
+          <div className="bg-black/80 backdrop-blur-sm border border-zinc-800 text-zinc-300 text-[9px] font-mono py-0.5 px-2 rounded">
+            {article.category.toUpperCase()}
+          </div>
+          {article.sector && (
+            <div className="bg-zinc-100/10 backdrop-blur-sm border border-white/5 text-zinc-400 text-[9px] font-mono py-0.5 px-2 rounded hidden sm:block">
+              {article.sector.toUpperCase()}
+            </div>
+          )}
+          {article.country && (
+            <div className="bg-zinc-100/10 backdrop-blur-sm border border-white/5 text-zinc-400 text-[9px] font-mono py-0.5 px-2 rounded">
+              {article.country.toUpperCase()}
+            </div>
+          )}
         </div>
 
         {/* Sentiment Badge overlay */}

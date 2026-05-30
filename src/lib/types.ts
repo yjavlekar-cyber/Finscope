@@ -8,6 +8,8 @@ export interface NewsArticle {
   publishedAt: string; // ISO string
   sourceName: string;
   category: string; // e.g. Markets, Stocks, Crypto, Economy, Banking, Startups, IPO, Global Finance
+  sector?: string; // e.g. Technology, Healthcare, Energy, Finance, Consumer
+  country?: string; // e.g. USA, UK, India, China, Global
   sentiment: 'Bullish' | 'Bearish' | 'Neutral';
   relevanceScore: number; // 0 to 100
   importanceScore: 'High' | 'Medium' | 'Low';
