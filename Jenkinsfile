@@ -25,8 +25,8 @@ pipeline {
                }
             }
             
-            stage ("deploy") {
-                steps {
+        stage ("deploy") {
+            steps {
                 sh "docker rm -f finscope-app || true"
                 sh "docker run -d -p 3000:3000 --name finscope-app ${DOCKER_HUB_USER}/${Image}:latest"
                 }
